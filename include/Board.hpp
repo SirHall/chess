@@ -3,10 +3,13 @@
 #define BOARD_HPP
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
 #include "Piece.hpp"
+
+typedef std::pair<std::uint_fast8_t, std::uint_fast8_t> PieceMove;
 
 class Board
 {
@@ -41,6 +44,23 @@ public:
 
     bool MovePiece(std::uint_fast8_t fromIndex, std::uint_fast8_t toIndex,
                    Color team, bool checkValidity = true);
+
+    std::vector<PieceMove> AllPossibleTeamMoves(Color team) const;
+
+    std::int16_t TeamScore(Color team) const;
+
+    bool IsCheck(Color team) const;
+
+    bool AnyPieceHitSpot(Color team, std::uint_fast8_t index) const;
+
+    void IteratePossibleTurns(
+        Color                                                       team,
+        std::function<bool(Board const &board, PieceMove moveMade)> action)
+        const;
+
+    std::uint_fast8_t GetKingIndex(Color team) const;
+
+    bool IsCheckMate(Color team, bool assumeMate = false) const;
 };
 
 #endif

@@ -138,18 +138,20 @@ std::vector<std::uint_fast8_t> Board::PossibleMoves(std::uint_fast8_t i) const
         switch (piece.GetType())
         {
             case PieceType::King:
-                for (std::uint_fast8_t i = 0; i < 3; i++)
+                for (int i = -1; i <= 1; i++)
                 {
-                    for (std::uint_fast8_t j = 0; j < 3; j++)
+                    for (int j = -1; j <= 1; j++)
                     {
                         if (i == 0 && j == 0)
                             continue;
 
                         std::uint_fast8_t newIndex =
                             PosToIndex(pieceX + i, pieceY + j);
+
                         if (GetPieceAtPos(newIndex, otherPiece))
                         {
-                            if (otherPiece.GetColor() != piece.GetColor())
+                            if (otherPiece.GetColor() != piece.GetColor() &&
+                                otherPiece.GetType() != PieceType::King)
                                 moves.push_back(newIndex);
                         }
                         else if (IsValidIndex(newIndex))
@@ -183,7 +185,8 @@ std::vector<std::uint_fast8_t> Board::PossibleMoves(std::uint_fast8_t i) const
                                 if (GetPieceAtPos(newIndex, otherPiece))
                                 {
                                     if (otherPiece.GetColor() !=
-                                        piece.GetColor())
+                                            piece.GetColor() &&
+                                        otherPiece.GetType() != PieceType::King)
                                         moves.push_back(newIndex);
                                     break; // Stop searching along this line
                                 }
@@ -204,7 +207,10 @@ std::vector<std::uint_fast8_t> Board::PossibleMoves(std::uint_fast8_t i) const
                 {
                     std::uint_fast8_t newIndex = PosToIndex(
                         pieceX + jumpDir.first, pieceY + jumpDir.second);
-                    if (IsValidIndex(newIndex))
+                    GetPieceAtPos(newIndex, otherPiece);
+                    if (IsValidIndex(newIndex) &&
+                        piece.GetColor() != otherPiece.GetColor() &&
+                        otherPiece.GetType() != PieceType::King)
                         moves.push_back(newIndex);
                 }
 
@@ -238,7 +244,8 @@ std::vector<std::uint_fast8_t> Board::PossibleMoves(std::uint_fast8_t i) const
                                       otherPiece))
                     {
                         // If these pieces are on enemy teams
-                        if (otherPiece.GetColor() != piece.GetColor())
+                        if (otherPiece.GetColor() != piece.GetColor() &&
+                            otherPiece.GetType() != PieceType::King)
                         {
                             newIndex = PosToIndex(pieceX + xDiff, pieceY + 1);
                             if (IsValidIndex(newIndex))
@@ -290,4 +297,205 @@ bool Board::MovePiece(std::uint_fast8_t fromIndex, std::uint_fast8_t toIndex,
         SetPieceAtPos(fromIndex, Piece());
     }
     return validMove;
+}
+
+std::vector<std::pair<std::uint_fast8_t, std::uint_fast8_t>>
+    Board::AllPossibleTeamMoves(Color team) const
+{
+    auto allMoves =
+        std::vector<std::pair<std::uint_fast8_t, std::uint_fast8_t>>();
+
+    Piece piece;
+    for (std::uint_fast8_t i = 0; i < (8 * 8); i++)
+    {
+        if (GetPieceAtPos(i, piece))
+        {
+            if (piece.GetColor() == team)
+            {
+                auto newMoves = PossibleMoves(i);
+                for (auto newIndex : newMoves)
+                    allMoves.push_back(std::make_pair(i, newIndex));
+            }
+        }
+    }
+
+    return allMoves;
+}
+
+std::int16_t PieceValue(PieceType type)
+{
+    std::int16_t values[7];
+    values[PieceType::None]   = 0;
+    values[PieceType::Pawn]   = 1;
+    values[PieceType::Rook]   = 2;
+    values[PieceType::Bishop] = 2;
+    values[PieceType::Knight] = 3;
+    values[PieceType::King]   = 5;
+    values[PieceType::Queen]  = 4;
+    return values[type];
+}
+
+std::int16_t Board::TeamScore(Color team) const
+{
+    std::int16_t points = 0;
+
+    for (std::size_t i = 0; i < (8 * 8); i++)
+    {
+        Piece piece;
+        if (GetPieceAtPos(i, piece))
+        {
+            // Add points for existance
+            points += PieceValue(piece.GetType()) *
+                      ((piece.GetColor() == team) ? 1 : -1);
+
+            auto possibleMoves = PossibleMoves(i);
+
+            for (auto singleMove : possibleMoves)
+            {
+                Piece otherPiece;
+                if (GetPieceAtPos(singleMove, otherPiece))
+                {
+                    if (piece.GetColor() == team &&
+                        otherPiece.GetColor() != team)
+                    {
+                        points += PieceValue(otherPiece.GetType());
+                    }
+                    if (piece.GetColor() != team &&
+                        otherPiece.GetColor() == team)
+                    {
+                        points -= PieceValue(otherPiece.GetType());
+                    }
+                }
+            }
+        }
+    }
+    for (auto kingTeam : {Color::Blue, Color::Red})
+    {
+        std::uint_fast8_t kingIndex = GetKingIndex(kingTeam);
+        std::uint_fast8_t kingX, kingY;
+        IndexToPos(kingIndex, kingX, kingY);
+        for (int x = -1; x <= 1; x++)
+        {
+            for (int y = -1; y <= 1; y++)
+            {
+                if (AnyPieceHitSpot(OtherColor(kingTeam),
+                                    PosToIndex(kingX + x, kingY + y)))
+                {
+                    // Add/lose points for hitting squares around the
+                    // king, and the king itself.
+                    points += PieceValue(PieceType::King) *
+                              ((kingTeam != team) ? 1 : -1);
+                }
+            }
+        }
+    }
+    return points;
+}
+
+bool Board::AnyPieceHitSpot(Color team, std::uint_fast8_t index) const
+{
+    if (!IsValidIndex(index))
+        return false;
+    for (std::size_t i = 0; i < (8 * 8); i++)
+    {
+        if (i == index)
+            continue;
+
+        Piece attackingPiece;
+        if (GetPieceAtPos(i, attackingPiece) &&
+            attackingPiece.GetColor() != team)
+        {
+            auto possibleMoves = PossibleMoves(i);
+            for (auto loc : possibleMoves)
+            {
+                if (loc == index)
+                    return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool Board::IsCheck(Color team) const
+{
+
+    return AnyPieceHitSpot(team, GetKingIndex(team));
+}
+
+void Board::IteratePossibleTurns(
+    Color           team, std::function<bool(
+                    Board const &                                   board,
+                    std::pair<std::uint_fast8_t, std::uint_fast8_t> moveMade)>
+                    action) const
+{
+    auto  possibleMoves = AllPossibleTeamMoves(team);
+    Board subBoard;
+    for (auto loc : possibleMoves)
+    {
+        subBoard = Board(*this);
+        subBoard.MovePiece(loc.first, loc.second, team, false);
+        if (!action(subBoard, loc))
+            break;
+    }
+}
+
+std::uint_fast8_t Board::GetKingIndex(Color team) const
+{
+    for (std::size_t i = 0; i < (8 * 8); i++)
+    {
+        Piece piece;
+        if (GetPieceAtPos(i, piece) && piece.GetType() == PieceType::King &&
+            piece.GetColor() == team)
+        {
+            return i;
+        }
+    }
+    return 255;
+}
+
+bool Board::IsCheckMate(Color team, bool assumeMate) const
+{
+    bool inMate = assumeMate ? true : IsCheck(team);
+
+    if (!inMate)
+        return false;
+
+    // Test to see if all the spaces around the king are hit
+    std::uint_fast8_t kingIndex = GetKingIndex(team);
+    std::uint_fast8_t kingX, kingY;
+    IndexToPos(kingIndex, kingX, kingY);
+    for (int x = -1; x <= 1; x++)
+    {
+        for (int y = -1; y <= 1; y++)
+        {
+            if (x == 0 && y == 0)
+                continue;
+
+            if (AnyPieceHitSpot(OtherColor(team),
+                                PosToIndex(kingX + x, kingY + y)))
+            {
+                // This spot is hit
+            }
+            else
+            {
+                // There is a free spot that the king can move into
+                return false;
+            }
+        }
+    }
+
+    bool kingCannotEscape = true;
+
+    // The king has nowhere to go, see if there are any moves we can do to get
+    // the king out of check
+    IteratePossibleTurns(team, [&](Board const &board, auto moveMade) {
+        if (!this->IsCheck(team))
+        {
+            kingCannotEscape = false;
+            return false;
+        }
+        return true;
+    });
+
+    return kingCannotEscape;
 }
