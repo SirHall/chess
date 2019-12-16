@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -17,7 +18,7 @@ int main(int argc, char *argv[])
 
     auto aiFactory       = AIFactory();
     auto teamAIS         = std::vector<AIFunc>(2);
-    teamAIS[Color::Blue] = aiFactory.GetAI("player");
+    teamAIS[Color::Blue] = aiFactory.GetAI("test");
     teamAIS[Color::Red]  = aiFactory.GetAI("player");
 
     Color currentTeam = Color::Red;
@@ -42,8 +43,18 @@ int main(int argc, char *argv[])
         if (board.CanMovePiece(desiredMove.first, desiredMove.second,
                                currentTeam))
         {
+            // Move the piece
             board.MovePiece(desiredMove.first, desiredMove.second, currentTeam,
                             false);
+
+            // Print out the team's move
+            std::string moveStr = board.IndexToCoord(desiredMove.first) +
+                                  board.IndexToCoord(desiredMove.second);
+            attron(COLOR_PAIR(colorPair));
+            mvprintw(13, 4, moveStr.c_str());
+            attroff(COLOR_PAIR(colorPair));
+
+            // std::this_thread::sleep_for(std::chrono::milliseconds(500));
             // I could have done (team=1-team), but felt this was more clear
             currentTeam =
                 (currentTeam == Color::Red) ? Color::Blue : Color::Red;
