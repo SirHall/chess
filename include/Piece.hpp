@@ -21,6 +21,8 @@ enum Color : std::uint8_t
     Red  = 1  // Replaces red team
 };
 
+Color OtherColor(Color color);
+
 enum MoveState : std::uint8_t
 {
     Unmoved = 0,

@@ -12,3 +12,8 @@ Piece::Piece(PieceType type, Color color)
     this->SetColor(color);
     this->SetMoveState(MoveState::Unmoved);
 }
+
+Color OtherColor(Color color)
+{
+    return (color == Color::Blue) ? Color::Red : Color::Blue;
+}
